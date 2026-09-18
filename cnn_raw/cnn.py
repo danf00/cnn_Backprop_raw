@@ -50,4 +50,4 @@ print(relu_bild)
 
 print(pool_bild)
 
-# 1 
+# 1 Durchlauf filter forward pass fertig
