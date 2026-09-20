@@ -8,6 +8,8 @@ X, Y = bild_1.shape
 kernel1 = np.random.randn(3, 3) * np.sqrt(2. / 3)
 I, J  = kernel1.shape
 
+print(np.sqrt(2. / 1024))
+
 def filter_forward_schleifen(kernel, bild):
     neu_bild = np.zeros((X, Y))
     for z in range(X):
