@@ -89,6 +89,9 @@ def softmax(z):
     exp = exp/np.sum(exp, axis=1, keepdims=True)
     return exp
 
+def relu_derivative(z):
+    return (z > 0).astype(float)
+
 def y_onehot(y, num_classes = 4):
     print(y)
     m = y.shape[0]
@@ -98,6 +101,7 @@ def y_onehot(y, num_classes = 4):
 
 def cross_entry_loss(onehot, A3):
     m = onehot.shape[0]
+    print(onehot)
     epsilon = 1e-12
     loss = -np.sum(onehot * np.log(A3 + epsilon)) / m
     return loss
@@ -107,18 +111,42 @@ def forwardpass(X_train, kernel):
     ZF = filter_forward_schleifen(kernel, X_train)
     AF = ReLuConv(ZF)
     A_pics, A_cords = pooling(AF)
+    A_pics = np.array(A_pics).flatten().reshape(1, -1)
     #A_p1 -> MLP
-    Z1 =  np.array(A_pics).ravel() @ W1 + b1
+    Z1 =  A_pics @ W1 + b1
     A1 = ReLuMLP(Z1)
     Z2 = A1 @ W2 + b2 
     A2 = softmax(Z2)
 
     return A2, Z2, Z1, A1, A_pics, A_cords, AF, ZF
 
-A2, Z2, Z1, A1, A_pics, A_cords, AF, ZF = forwardpass(bild_nullen, filter)
 
-print(A2)
 onehot = y_onehot(label)
-loss = cross_entry_loss(onehot, A2)
-print(loss)
+#Backpropagation
+
+
+learning_rate = 0.1
+epochs = 5
+
+for epoch in range(epochs):
+
+    A2, Z2, Z1, A1, A_pics, A_cords, AF, ZF = forwardpass(bild_nullen, filter)
+    loss = cross_entry_loss(onehot, A2)
+    print(loss)
+
+    delta2 = A2 - onehot
+    dW2 = A1.T @ delta2
+    db2 = delta2
+
+    delta1 = (delta2 @ W2.T) * relu_derivative(Z1)
+    dW1 = A_pics.T @ delta1
+    db1 = delta1
+
+    W1 = W1 - learning_rate * dW1
+    b1 = b1 - learning_rate * db1
+
+    W2 = W2 - learning_rate * dW2
+    b2 = b2 - learning_rate * db2
+
+
 
