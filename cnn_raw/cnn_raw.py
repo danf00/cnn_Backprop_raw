@@ -1,7 +1,7 @@
 import numpy as np
 import math
 
-np.set_printoptions(suppress=True, precision=6)
+#np.set_printoptions(suppress=True, precision=6)
 
 bild_1 = np.random.randn(4, 4)
 bild_nullen = np.pad(bild_1, pad_width=1, mode='constant', constant_values=0)
@@ -93,7 +93,6 @@ def relu_derivative(z):
     return (z > 0).astype(float)
 
 def y_onehot(y, num_classes = 4):
-    print(y)
     m = y.shape[0]
     onehot = np.zeros((m, num_classes))
     onehot[np.arange(m), y.astype(int)] = 1
@@ -101,8 +100,7 @@ def y_onehot(y, num_classes = 4):
 
 def cross_entry_loss(onehot, A3):
     m = onehot.shape[0]
-    print(onehot)
-    epsilon = 1e-12
+    epsilon = 1e-9
     loss = -np.sum(onehot * np.log(A3 + epsilon)) / m
     return loss
 
@@ -124,9 +122,8 @@ def forwardpass(X_train, kernel):
 onehot = y_onehot(label)
 #Backpropagation
 
-
 learning_rate = 0.1
-epochs = 5
+epochs = 100000
 
 for epoch in range(epochs):
 
@@ -148,5 +145,31 @@ for epoch in range(epochs):
     W2 = W2 - learning_rate * dW2
     b2 = b2 - learning_rate * db2
 
+    dA_pics = delta1 @ W1.T
+    dA_pics = dA_pics.reshape(4, 2, 2)
+    dAF = [np.zeros((X, Y)) for _ in range(len(filter))]
+
+    for k in range(4):
+        for i in range(2):
+            for j in range(2):
+                z, y = A_cords[k][i][j]
+                dAF[k][int(z)][int(y)] = dA_pics[k][i][j]
+
+    dZF = [dAF[k] * relu_derivative(ZF[k]) for k in range(4)]
+
+    dKernels = []
+    for k in range(4):
+        dK  = np.zeros((I, J))
+        for i in range(I):
+            for j in range(J):
+                wert = 0
+                for z in range(X):
+                    for y in range(Y):
+                        wert += bild_nullen[z+i][y+j] * dZF[k][z][y]
+                dK[i][j] = wert
+        dKernels.append(dK)
+
+    for k in range(4):
+        filter[k] = filter[k] - learning_rate * dKernels[k]
 
 
