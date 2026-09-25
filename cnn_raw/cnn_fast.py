@@ -2,9 +2,19 @@ import numpy as np
 import scipy.signal
 from scipy import ndimage
 from skimage.measure import block_reduce
+import importlib
+from tqdm import tqdm
 
-bild_1 = np.random.randn(4, 4)
-kernel1 = np.random.randn(3, 3) * np.sqrt(2. / 3)
+cifar10 = importlib.import_module("tensorflow.keras.datasets.cifar10")
+(x_train, y_train), (x_test, y_test) = cifar10.load_data()
+
+x_normalized = x_train.astype(np.float32) / 255.0
+
+kernel1 = np.random.randn(3, 3) * np.sqrt(2. / 27)
+kernel2 = np.random.randn(3, 3) * np.sqrt(2. / 27)
+kernel3 = np.random.randn(3, 3) * np.sqrt(2. / 27)
+kernel4 = np.random.randn(3, 3) * np.sqrt(2. / 27)
+
 
 W1 = np.random.randn(4, 6) * np.sqrt(2. / 6)
 b1 = np.zeros((1, 6))
@@ -16,19 +26,15 @@ def filter_forward_scipy(kernel, bild):
     output = scipy.signal.correlate2d(bild, kernel, mode='same')
     return output
 
-filter_bild = filter_forward_scipy(kernel1, bild_1)
-
 def ReLu(z):
     a = np.maximum(0, z)
     return a
 
-relu_bild = ReLu(filter_bild)
 
 def pool(bild):
     out_max = block_reduce(bild, block_size=(2, 2), func=np.max)
     return out_max
 
-pool_bild = pool(relu_bild)
 
 def softmax(z):
     z_shifted = z - np.max(z, axis=1, keepdims=True)
@@ -51,6 +57,6 @@ def forwardpass(X_train, kernel):
     return A2, Z2, Z1, A1, AFP, AF, ZF
 
 
-print(forwardpass(bild_1, kernel1))
+print(forwardpass(x_normalized[0], kernel1))
 
 # 1 Durchlauf filter forward pass fertig
