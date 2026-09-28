@@ -4,6 +4,16 @@ import importlib
 import random
 import time
 from tqdm import tqdm
+import matplotlib.pyplot as plt
+
+plt.ion() # Interaktiven Modus aktivieren
+fig, ax = plt.subplots()
+losses = []
+line, = ax.plot(losses, label='Train Loss')
+ax.set_xlabel('Epoche')
+ax.set_ylabel('Loss')
+plt.show(block=False)
+
 cifar10 = importlib.import_module("tensorflow.keras.datasets.cifar10")
 (x_train, y_train), (x_test, y_test) = cifar10.load_data()
 
@@ -16,21 +26,24 @@ bild_nullen = np.pad(bild_1, pad_width=1, mode='constant', constant_values=0)
 label = np.array([2])
 
 #conv layer festlegen 
-kernel1 = np.random.randn(3, 3) * np.sqrt(2. / 27)
-kernel2 = np.random.randn(3, 3) * np.sqrt(2. / 27)
-kernel3 = np.random.randn(3, 3) * np.sqrt(2. / 27)
-kernel4 = np.random.randn(3, 3) * np.sqrt(2. / 27)
+kernel1 = np.random.randn(3, 3, 3) * np.sqrt(2. / 27)
+kernel2 = np.random.randn(3, 3, 3) * np.sqrt(2. / 27)
+kernel3 = np.random.randn(3, 3, 3) * np.sqrt(2. / 27)
+kernel4 = np.random.randn(3, 3, 3) * np.sqrt(2. / 27)
 
-I, J  = kernel1.shape
+I, J, C  = kernel1.shape
 
-filter  = [kernel1, kernel2, kernel3, kernel4]
+filter  = [np.random.randn(I, J, C) * np.sqrt(2. / (I * J * C)) for _ in range(16)]
 NUM_FILTER = len(filter)
 
-W1 = np.random.randn(1024, 64) * np.sqrt(2./ 1024)
-b1 = np.zeros((1, 64))
+W1 = np.random.randn(NUM_FILTER * 16 * 16, 256) * np.sqrt(2./ (NUM_FILTER * 16 * 16))
+b1 = np.zeros((1, 256))
 
-W2 = np.random.randn(64, 10) * np.sqrt(2. / 64)
-b2 = np.zeros((1, 10))
+W2 = np.random.randn(256, 64) * np.sqrt(2. / 256)
+b2 = np.zeros((1, 64))
+
+W3 = np.random.randn(64, 10) * np.sqrt(2. / 64)
+b3 = np.zeros((1, 10))
 
 def filter_forward_schleifen(kernel, bild):
     output = []
@@ -42,7 +55,7 @@ def filter_forward_schleifen(kernel, bild):
                 for i in range(I):
                     for j in range(J):
                         for p in range(3):
-                            neu_pixel_wert += bild[z+1-1+i][y+1-1+j][p]*t[i][j]
+                            neu_pixel_wert += bild[z+1-1+i][y+1-1+j][p]*t[i][j][p]
                 neu_bild[z][y] = neu_pixel_wert
         output.append(neu_bild)
     return output
@@ -121,15 +134,17 @@ def forwardpass(X_train, kernel):
     Z1 =  A_pics @ W1 + b1
     A1 = ReLuMLP(Z1)
     Z2 = A1 @ W2 + b2 
-    A2 = softmax(Z2)
+    A2 = ReLuMLP(Z2)
+    Z3 = A2 @ W3 + b3
+    A3 = softmax(Z3)
 
-    return A2, Z2, Z1, A1, A_pics, A_cords, AF, ZF
+    return A3, Z3 , A2, Z2, Z1, A1, A_pics, A_cords, AF, ZF
 
 #Backpropagation
 
-BATCH_SIZE = 32
+BATCH_SIZE = 128
 learning_rate = 0.01
-epochs = 10000 // BATCH_SIZE
+epochs = 200000 // BATCH_SIZE
 
 pbar = tqdm(range(epochs), desc="Training", unit="epoch")
 
@@ -139,13 +154,12 @@ for epoch in pbar:
     db1_batch = np.zeros_like(b1)
     dW2_batch = np.zeros_like(W2)
     db2_batch = np.zeros_like(b2)
-    dKernels_batch = [np.zeros((I, J)) for _ in range(NUM_FILTER)]
+    dKernels_batch = [np.zeros((I, J, 3)) for _ in range(NUM_FILTER)]
     loss_batch = 0.0
 
     batch_indices = np.random.randint(0, 49999, size=BATCH_SIZE)
-    batch_indices = np.array([123, 123, 123])
-    #rndm = 987
     for rndm in batch_indices:
+
         pic = x_normalized[rndm]
         X, Y = pic.shape[0], pic.shape[1]
         pic_nullen = np.pad(
@@ -157,12 +171,16 @@ for epoch in pbar:
 
         onehot = y_onehot(y_train[rndm])
 
-        A2, Z2, Z1, A1, A_pics, A_cords, AF, ZF = forwardpass(pic_nullen, filter)
-        loss = cross_entry_loss(onehot, A2)
+        A3, Z3, A2, Z2, Z1, A1, A_pics, A_cords, AF, ZF = forwardpass(pic_nullen, filter)
+        loss = cross_entry_loss(onehot, A3)
         loss_batch += loss
         #print("Epoch: ", epoch, " | Loss: ", loss)
 
-        delta2 = A2 - onehot
+        delta3  = A3 - onehot
+        dW3 = A2.T @ delta3
+        db3 = delta3
+
+        delta2 = (delta3 @ W3.T) * relu_derivative(Z2)
         dW2 = A1.T @ delta2
         db2 = delta2
 
@@ -171,29 +189,30 @@ for epoch in pbar:
         db1 = delta1
 
         dA_pics = delta1 @ W1.T
-        dA_pics = dA_pics.reshape(4, 16, 16)
+        dA_pics = dA_pics.reshape(NUM_FILTER, 16, 16)
         dAF = [np.zeros((X, Y)) for _ in range(len(filter))]
 
-        for k in range(4):
+        for k in range(NUM_FILTER):
             for i in range(X//2):
                 for j in range(Y//2):
                     z, y = A_cords[k][i][j]
                     dAF[k][int(z)][int(y)] = dA_pics[k][i][j]
 
-        dZF = [dAF[k] * relu_derivative(ZF[k]) for k in range(4)]
+        dZF = [dAF[k] * relu_derivative(ZF[k]) for k in range(NUM_FILTER)]
 
         dKernels = []
-        for k in range(4):
-            dK  = np.zeros((I, J))
+        for k in range(NUM_FILTER):
+            dK  = np.zeros((I, J, C))
             for i in range(I):
                 for j in range(J):
-                    wert = 0
-                    for z in range(X):
-                        for y in range(Y):
-                            for p in range(3):
+                    for p in range(3):
+                        wert = 0
+                        for z in range(X):
+                            for y in range(Y):
                                 wert += pic_nullen[z+i][y+j][p] * dZF[k][z][y]
-                    dK[i][j] = wert
+                        dK[i][j][p] = wert
             dKernels.append(dK)
+            dKernels_batch[k] += dKernels[k]
 
         dW1_batch += dW1
         db1_batch += db1
@@ -208,18 +227,29 @@ for epoch in pbar:
         dKernels_batch[k] /= BATCH_SIZE
     loss_batch /= BATCH_SIZE
 
+    current_loss = loss_batch
+    losses.append(current_loss)
+    
+    # Diagramm-Daten aktualisieren
+    line.set_ydata(losses)
+    line.set_xdata(range(len(losses)))
+    ax.relim()
+    ax.autoscale_view()
+    
+    plt.draw()
+    plt.pause(0.001)
+    pbar.set_postfix({"loss": loss_batch})
 
-    if epoch % 10 == 0:
-        pbar.set_postfix({"loss": loss_batch})
+    for k in range(NUM_FILTER):
+        filter[k] = filter[k] - learning_rate * dKernels_batch[k]
 
-    for k in range(4):
-        filter[k] = filter[k] - learning_rate * dKernels[k]
+    W1 = W1 - learning_rate * dW1_batch
+    b1 = b1 - learning_rate * db1_batch
 
-    W1 = W1 - learning_rate * dW1
-    b1 = b1 - learning_rate * db1
-
-    W2 = W2 - learning_rate * dW2
-    b2 = b2 - learning_rate * db2
+    W2 = W2 - learning_rate * dW2_batch
+    b2 = b2 - learning_rate * db2_batch
 
 print("------Training fertig------")
 print("Model loss | ", loss)
+
+np.savez_compressed('mein_netz_weights.npz', w1=W1, bias1=b1, w2=W2, bias2=b2, filter=filter)
