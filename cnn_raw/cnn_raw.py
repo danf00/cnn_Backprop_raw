@@ -1,8 +1,6 @@
 import numpy as np
 import math
 import importlib
-import random
-import time
 from tqdm import tqdm
 import matplotlib.pyplot as plt
 
@@ -18,20 +16,8 @@ cifar10 = importlib.import_module("tensorflow.keras.datasets.cifar10")
 (x_train, y_train), (x_test, y_test) = cifar10.load_data()
 
 x_normalized = x_train.astype(np.float32) / 255.0
-#np.set_printoptions(suppress=True, precision=6)
 
-bild_1 = np.random.randn(4, 4)
-bild_nullen = np.pad(bild_1, pad_width=1, mode='constant', constant_values=0)
-
-label = np.array([2])
-
-#conv layer festlegen 
-kernel1 = np.random.randn(3, 3, 3) * np.sqrt(2. / 27)
-kernel2 = np.random.randn(3, 3, 3) * np.sqrt(2. / 27)
-kernel3 = np.random.randn(3, 3, 3) * np.sqrt(2. / 27)
-kernel4 = np.random.randn(3, 3, 3) * np.sqrt(2. / 27)
-
-I, J, C  = kernel1.shape
+I, J, C  = 3, 3, 3
 
 filter  = [np.random.randn(I, J, C) * np.sqrt(2. / (I * J * C)) for _ in range(16)]
 NUM_FILTER = len(filter)
@@ -39,11 +25,8 @@ NUM_FILTER = len(filter)
 W1 = np.random.randn(NUM_FILTER * 16 * 16, 256) * np.sqrt(2./ (NUM_FILTER * 16 * 16))
 b1 = np.zeros((1, 256))
 
-W2 = np.random.randn(256, 64) * np.sqrt(2. / 256)
-b2 = np.zeros((1, 64))
-
-W3 = np.random.randn(64, 10) * np.sqrt(2. / 64)
-b3 = np.zeros((1, 10))
+W2 = np.random.randn(256, 10) * np.sqrt(2. / 256)
+b2 = np.zeros((1, 10))
 
 def filter_forward_schleifen(kernel, bild):
     output = []
@@ -134,16 +117,14 @@ def forwardpass(X_train, kernel):
     Z1 =  A_pics @ W1 + b1
     A1 = ReLuMLP(Z1)
     Z2 = A1 @ W2 + b2 
-    A2 = ReLuMLP(Z2)
-    Z3 = A2 @ W3 + b3
-    A3 = softmax(Z3)
+    A2 = softmax(Z2)
 
-    return A3, Z3 , A2, Z2, Z1, A1, A_pics, A_cords, AF, ZF
+    return A2, Z2, Z1, A1, A_pics, A_cords, AF, ZF
 
 #Backpropagation
 
 BATCH_SIZE = 128
-learning_rate = 0.01
+learning_rate = 0.05
 epochs = 200000 // BATCH_SIZE
 
 pbar = tqdm(range(epochs), desc="Training", unit="epoch")
@@ -171,16 +152,11 @@ for epoch in pbar:
 
         onehot = y_onehot(y_train[rndm])
 
-        A3, Z3, A2, Z2, Z1, A1, A_pics, A_cords, AF, ZF = forwardpass(pic_nullen, filter)
-        loss = cross_entry_loss(onehot, A3)
+        A2, Z2, Z1, A1, A_pics, A_cords, AF, ZF = forwardpass(pic_nullen, filter)
+        loss = cross_entry_loss(onehot, A2)
         loss_batch += loss
-        #print("Epoch: ", epoch, " | Loss: ", loss)
 
-        delta3  = A3 - onehot
-        dW3 = A2.T @ delta3
-        db3 = delta3
-
-        delta2 = (delta3 @ W3.T) * relu_derivative(Z2)
+        delta2 = A2 - onehot
         dW2 = A1.T @ delta2
         db2 = delta2
 
